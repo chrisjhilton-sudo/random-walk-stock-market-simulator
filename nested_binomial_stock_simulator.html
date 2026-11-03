@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Timeframe Nested Binomial Market Simulator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-sky-500 selection:text-white">
+
+    <!-- Header Navigation -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-sky-500/10 text-sky-400 rounded-lg border border-sky-500/20">
+                    <i data-lucide="git-fork" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight text-white flex items-center gap-2">
+                        Nested Binomial Cascade Simulator
+                    </h1>
+                    <p class="text-xs text-slate-400">Multi-Frequency Probability & Volatility Clustering Engine</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button id="runBtn" class="flex items-center space-x-2 bg-sky-600 hover:bg-sky-500 text-white font-medium px-4 py-2 rounded-lg shadow-lg shadow-sky-600/20 transition active:scale-95">
+                    <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                    <span>Run Simulation</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Top Educational Banner -->
+        <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div class="flex items-start space-x-4">
+                <div class="p-2.5 bg-amber-500/10 text-amber-400 rounded-lg border border-amber-500/20 mt-1 sm:mt-0">
+                    <i data-lucide="shield-alert" class="w-5 h-5"></i>
+                </div>
+                <div class="space-y-1">
+                    <h3 class="font-semibold text-sm text-slate-200">The "Stepping Away" Principle</h3>
+                    <p class="text-xs text-slate-400 max-w-3xl leading-relaxed">
+                        In the short term, a sequence of negative coin flips can easily cascade across consecutive steps ($p^4 = 6.25\%$). 
+                        However, over 50+ steps, mathematical gravity (fundamental cash flows) dominates, preventing total ruin ($p^{50} \approx 0$). 
+                        Stepping away shields your emotions from short-term branch noise while allowing long-term probability to work.
+                    </p>
+                </div>
+            </div>
+            <div class="bg-slate-950/80 px-4 py-3 rounded-lg border border-slate-800 text-right min-w-[200px]">
+                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">4-Step Down Probability</div>
+                <div id="prob4Down" class="text-lg font-mono font-bold text-amber-400">6.25%</div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mt-1">50-Step Down Probability</div>
+                <div id="prob50Down" class="text-xs font-mono text-emerald-400">8.88 × 10⁻¹⁶ %</div>
+            </div>
+        </div>
+
+        <!-- Dashboard Grid Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Sidebar Controls (4 Cols) -->
+            <div class="lg:col-span-4 space-y-6">
+
+                <!-- Basic Simulation Parameters -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                        <i data-lucide="sliders" class="w-4 h-4 text-sky-400"></i>
+                        Core Market Parameters
+                    </h2>
+
+                    <!-- Initial Price -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium">Initial Asset Price ($S_0$)</label>
+                            <span id="initialPriceVal" class="font-mono text-sky-400">$100</span>
+                        </div>
+                        <input type="range" id="initialPrice" min="10" max="500" value="100" step="5" class="w-full accent-sky-500 bg-slate-800 rounded h-1.5">
+                    </div>
+
+                    <!-- Steps (Time Horizon in Days) -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium">Simulation Horizon (Days)</label>
+                            <span id="stepsVal" class="font-mono text-sky-400">252 Days (1 Yr)</span>
+                        </div>
+                        <input type="range" id="steps" min="50" max="756" value="252" step="1" class="w-full accent-sky-500 bg-slate-800 rounded h-1.5">
+                    </div>
+
+                    <!-- Daily Move Up Size (u) -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium">Up Step Size ($u$)</label>
+                            <span id="upStepVal" class="font-mono text-emerald-400">+1.5%</span>
+                        </div>
+                        <input type="range" id="upStep" min="0.1" max="5.0" value="1.5" step="0.1" class="w-full accent-emerald-500 bg-slate-800 rounded h-1.5">
+                    </div>
+
+                    <!-- Daily Move Down Size (d) -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium">Down Step Size ($d$)</label>
+                            <span id="downStepVal" class="font-mono text-rose-400">-1.4%</span>
+                        </div>
+                        <input type="range" id="downStep" min="0.1" max="5.0" value="1.4" step="0.1" class="w-full accent-rose-500 bg-slate-800 rounded h-1.5">
+                    </div>
+                </div>
+
+                <!-- Multi-Timeframe Nested Frequency Biases -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <i data-lucide="layers" class="w-4 h-4 text-sky-400"></i>
+                            Nested Frequency Biases
+                        </h2>
+                        <span class="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded font-mono">Cascade Mode</span>
+                    </div>
+
+                    <p class="text-xs text-slate-400">Higher timeframe coin flips dynamically shift the probability weight of the daily execution coin below them.</p>
+
+                    <!-- 2-Yearly Bias -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-purple-500"></span> 2-Year Macro Trend
+                            </label>
+                            <span id="bias2YVal" class="font-mono text-purple-400">55% Bull</span>
+                        </div>
+                        <input type="range" id="bias2Y" min="30" max="70" value="55" step="1" class="w-full accent-purple-500 bg-slate-800 rounded h-1.5">
+                    </div>
+
+                    <!-- Yearly Bias -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-blue-500"></span> Yearly Structural Bias
+                            </label>
+                            <span id="bias1YVal" class="font-mono text-blue-400">53% Bull</span>
+                        </div>
+                        <input type="range" id="bias1Y" min="30" max="70" value="53" step="1" class="w-full accent-blue-500 bg-slate-800 rounded h-1.5">
+                    </div>
+
+                    <!-- Monthly Bias -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-amber-500"></span> Monthly Cycle Shift
+                            </label>
+                            <span id="bias1MVal" class="font-mono text-amber-400">52% Bull</span>
+                        </div>
+                        <input type="range" id="bias1M" min="30" max="70" value="52" step="1" class="w-full accent-amber-500 bg-slate-800 rounded h-1.5">
+                    </div>
+
+                    <!-- Weekly Bias -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-cyan-500"></span> Weekly Momentum
+                            </label>
+                            <span id="bias1WVal" class="font-mono text-cyan-400">51% Bull</span>
+                        </div>
+                        <input type="range" id="bias1W" min="30" max="70" value="51" step="1" class="w-full accent-cyan-500 bg-slate-800 rounded h-1.5">
+                    </div>
+
+                    <!-- Daily Base Bias -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Daily Base Coin Noise
+                            </label>
+                            <span id="bias1DVal" class="font-mono text-emerald-400">50% Neutral</span>
+                        </div>
+                        <input type="range" id="bias1D" min="30" max="70" value="50" step="1" class="w-full accent-emerald-500 bg-slate-800 rounded h-1.5">
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Main Charts & Analytics Area (8 Cols) -->
+            <div class="lg:col-span-8 space-y-6">
+
+                <!-- Key Metrics Summary Strip -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Final Asset Price</div>
+                        <div id="statFinalPrice" class="text-xl font-mono font-bold text-white mt-1">$0.00</div>
+                        <div id="statReturn" class="text-xs font-mono font-semibold mt-0.5 text-slate-400">+0.00%</div>
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Max Drawdown</div>
+                        <div id="statMaxDD" class="text-xl font-mono font-bold text-rose-400 mt-1">0.00%</div>
+                        <div id="statMaxDDVal" class="text-xs font-mono text-slate-400 mt-0.5">-$0.00</div>
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Max Down Streak</div>
+                        <div id="statDownStreak" class="text-xl font-mono font-bold text-amber-400 mt-1">0 Days</div>
+                        <div id="statStreakProb" class="text-xs font-mono text-slate-400 mt-0.5">P: 0.00%</div>
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ann. Volatility</div>
+                        <div id="statVol" class="text-xl font-mono font-bold text-sky-400 mt-1">0.00%</div>
+                        <div class="text-xs text-slate-400 mt-0.5">Clustered Vol</div>
+                    </div>
+                </div>
+
+                <!-- Main Chart Container -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                            <i data-lucide="line-chart" class="w-4 h-4 text-sky-400"></i>
+                            Simulated Price Trajectory & High-Water Mark
+                        </h2>
+                        <div class="flex items-center space-x-4 text-xs">
+                            <span class="flex items-center gap-1.5 text-slate-300">
+                                <span class="w-3 h-0.5 bg-sky-400 inline-block"></span> Price Path
+                            </span>
+                            <span class="flex items-center gap-1.5 text-slate-400">
+                                <span class="w-3 h-0.5 border-t border-dashed border-slate-500 inline-block"></span> Peak Highs
+                            </span>
+                        </div>
+                    </div>
+                    <div class="h-80 w-full">
+                        <canvas id="priceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Secondary Chart: Drawdown Profile -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                            <i data-lucide="trending-down" class="w-4 h-4 text-rose-400"></i>
+                            Drawdown Depth (% from Peak)
+                        </h2>
+                        <span class="text-xs text-slate-500 font-mono">Underwater Phase Analysis</span>
+                    </div>
+                    <div class="h-36 w-full">
+                        <canvas id="drawdownChart"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-slate-900/50 py-4 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+            <div>Nested Binomial Model • Multi-Scale Cascade Framework</div>
+            <div>Built for High-Conviction Low-Noise CIO Analysis</div>
+        </div>
+    </footer>
+
+    <!-- JavaScript Simulation Engine -->
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // Chart References
+        let priceChart = null;
+        let drawdownChart = null;
+
+        // DOM Elements
+        const runBtn = document.getElementById('runBtn');
+        const initialPriceEl = document.getElementById('initialPrice');
+        const initialPriceVal = document.getElementById('initialPriceVal');
+        const stepsEl = document.getElementById('steps');
+        const stepsVal = document.getElementById('stepsVal');
+        const upStepEl = document.getElementById('upStep');
+        const upStepVal = document.getElementById('upStepVal');
+        const downStepEl = document.getElementById('downStep');
+        const downStepVal = document.getElementById('downStepVal');
+
+        // Bias Sliders
+        const bias2YEl = document.getElementById('bias2Y');
+        const bias2YVal = document.getElementById('bias2YVal');
+        const bias1YEl = document.getElementById('bias1Y');
+        const bias1YVal = document.getElementById('bias1YVal');
+        const bias1MEl = document.getElementById('bias1M');
+        const bias1MVal = document.getElementById('bias1MVal');
+        const bias1WEl = document.getElementById('bias1W');
+        const bias1WVal = document.getElementById('bias1WVal');
+        const bias1DEl = document.getElementById('bias1D');
+        const bias1DVal = document.getElementById('bias1DVal');
+
+        // Stats Elements
+        const statFinalPrice = document.getElementById('statFinalPrice');
+        const statReturn = document.getElementById('statReturn');
+        const statMaxDD = document.getElementById('statMaxDD');
+        const statMaxDDVal = document.getElementById('statMaxDDVal');
+        const statDownStreak = document.getElementById('statDownStreak');
+        const statStreakProb = document.getElementById('statStreakProb');
+        const statVol = document.getElementById('statVol');
+        const prob4Down = document.getElementById('prob4Down');
+        const prob50Down = document.getElementById('prob50Down');
+
+        // Update Slider Labels
+        function updateLabels() {
+            initialPriceVal.innerText = `$${initialPriceEl.value}`;
+            stepsVal.innerText = `${stepsEl.value} Days`;
+            upStepVal.innerText = `+${upStepEl.value}%`;
+            downStepVal.innerText = `-${downStepEl.value}%`;
+
+            bias2YVal.innerText = `${bias2YEl.value}% Bull`;
+            bias1YVal.innerText = `${bias1YEl.value}% Bull`;
+            bias1MVal.innerText = `${bias1MEl.value}% Bull`;
+            bias1WVal.innerText = `${bias1WEl.value}% Bull`;
+            bias1DVal.innerText = `${bias1DEl.value}% ${bias1DEl.value == 50 ? 'Neutral' : 'Bull'}`;
+
+            // Math Probability display
+            const pBase = parseFloat(bias1DEl.value) / 100;
+            const p4 = Math.pow(1 - pBase, 4) * 100;
+            const p50 = Math.pow(1 - pBase, 50) * 100;
+            prob4Down.innerText = `${p4.toFixed(2)}%`;
+            prob50Down.innerText = `${p50.toExponential(2)}%`;
+        }
+
+        // Attach Input Listeners
+        [initialPriceEl, stepsEl, upStepEl, downStepEl, bias2YEl, bias1YEl, bias1MEl, bias1WEl, bias1DEl].forEach(el => {
+            el.addEventListener('input', () => {
+                updateLabels();
+                runSimulation();
+            });
+        });
+
+        // Nested Multi-Timeframe Simulation Logic
+        function runSimulation() {
+            const S0 = parseFloat(initialPriceEl.value);
+            const totalSteps = parseInt(stepsEl.value);
+            const u = 1 + (parseFloat(upStepEl.value) / 100);
+            const d = 1 - (parseFloat(downStepEl.value) / 100);
+
+            // Timeframe step sizes in days
+            const DAYS_2Y = 504;
+            const DAYS_1Y = 252;
+            const DAYS_1M = 21;
+            const DAYS_1W = 5;
+
+            // Generate macro flip decisions
+            let flip2Y = Math.random() < (parseFloat(bias2YEl.value) / 100) ? 1 : -1;
+            let flip1Y = Math.random() < (parseFloat(bias1YEl.value) / 100) ? 1 : -1;
+            let flip1M = Math.random() < (parseFloat(bias1MEl.value) / 100) ? 1 : -1;
+            let flip1W = Math.random() < (parseFloat(bias1WEl.value) / 100) ? 1 : -1;
+
+            const prices = [S0];
+            const peakPrices = [S0];
+            const drawdowns = [0];
+            const labels = ['Day 0'];
+            
+            let currentPrice = S0;
+            let currentPeak = S0;
+            let maxDrawdown = 0;
+            let maxDrawdownVal = 0;
+
+            let currentStreak = 0;
+            let maxStreak = 0;
+
+            let dailyReturns = [];
+
+            for (let day = 1; day <= totalSteps; day++) {
+                // Update higher timeframe flips as periods roll over
+                if (day % DAYS_2Y === 0) flip2Y = Math.random() < (parseFloat(bias2YEl.value) / 100) ? 1 : -1;
+                if (day % DAYS_1Y === 0) flip1Y = Math.random() < (parseFloat(bias1YEl.value) / 100) ? 1 : -1;
+                if (day % DAYS_1M === 0) flip1M = Math.random() < (parseFloat(bias1MEl.value) / 100) ? 1 : -1;
+                if (day % DAYS_1W === 0) flip1W = Math.random() < (parseFloat(bias1WEl.value) / 100) ? 1 : -1;
+
+                // Base daily probability
+                let pDaily = parseFloat(bias1DEl.value) / 100;
+
+                // Cascade influence from upper timeframe flips (+/- 3% adjustment per layer)
+                const cascadeShift = (flip2Y * 0.04) + (flip1Y * 0.03) + (flip1M * 0.02) + (flip1W * 0.01);
+                let finalP = Math.max(0.05, Math.min(0.95, pDaily + cascadeShift));
+
+                // Execute Daily Coin Flip
+                const isUp = Math.random() < finalP;
+                const prevPrice = currentPrice;
+
+                if (isUp) {
+                    currentPrice *= u;
+                    currentStreak = 0;
+                } else {
+                    currentPrice *= d;
+                    currentStreak++;
+                    if (currentStreak > maxStreak) maxStreak = currentStreak;
+                }
+
+                // Returns calculation
+                dailyReturns.push((currentPrice - prevPrice) / prevPrice);
+
+                // High water mark and drawdown
+                if (currentPrice > currentPeak) {
+                    currentPeak = currentPrice;
+                }
+                const dd = ((currentPeak - currentPrice) / currentPeak) * 100;
+                if (dd > maxDrawdown) {
+                    maxDrawdown = dd;
+                    maxDrawdownVal = currentPeak - currentPrice;
+                }
+
+                prices.push(currentPrice);
+                peakPrices.push(currentPeak);
+                drawdowns.push(-dd);
+                labels.push(`Day ${day}`);
+            }
+
+            // Calculate Volatility (Annualized)
+            const meanRet = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
+            const variance = dailyReturns.reduce((a, b) => a + Math.pow(b - meanRet, 2), 0) / dailyReturns.length;
+            const annVol = Math.sqrt(variance * 252) * 100;
+
+            // Render Stats
+            const totalRet = ((currentPrice - S0) / S0) * 100;
+            statFinalPrice.innerText = `$${currentPrice.toFixed(2)}`;
+            statReturn.innerText = `${totalRet >= 0 ? '+' : ''}${totalRet.toFixed(2)}%`;
+            statReturn.className = `text-xs font-mono font-semibold mt-0.5 ${totalRet >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            statMaxDD.innerText = `-${maxDrawdown.toFixed(2)}%`;
+            statMaxDDVal.innerText = `-$${maxDrawdownVal.toFixed(2)}`;
+
+            statDownStreak.innerText = `${maxStreak} Days`;
+            const streakProb = Math.pow(1 - (parseFloat(bias1DEl.value) / 100), maxStreak) * 100;
+            statStreakProb.innerText = `P: ${streakProb < 0.01 ? streakProb.toExponential(2) : streakProb.toFixed(2)}%`;
+
+            statVol.innerText = `${annVol.toFixed(1)}%`;
+
+            // Render Charts
+            renderCharts(labels, prices, peakPrices, drawdowns);
+        }
+
+        // Render Chart.js Visualizations
+        function renderCharts(labels, prices, peakPrices, drawdowns) {
+            const ctxPrice = document.getElementById('priceChart').getContext('2d');
+            const ctxDD = document.getElementById('drawdownChart').getContext('2d');
+
+            if (priceChart) priceChart.destroy();
+            if (drawdownChart) drawdownChart.destroy();
+
+            // Gradient for main price chart
+            const gradient = ctxPrice.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, 'rgba(2, 132, 199, 0.25)');
+            gradient.addColorStop(1, 'rgba(2, 132, 199, 0.0)');
+
+            priceChart = new Chart(ctxPrice, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Asset Price ($)',
+                            data: prices,
+                            borderColor: '#38bdf8',
+                            borderWidth: 2,
+                            fill: true,
+                            backgroundColor: gradient,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 4
+                        },
+                        {
+                            label: 'Peak High ($)',
+                            data: peakPrices,
+                            borderColor: '#64748b',
+                            borderWidth: 1.5,
+                            borderDash: [4, 4],
+                            fill: false,
+                            tension: 0,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            titleColor: '#94a3b8',
+                            bodyColor: '#f8fafc',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: $${parseFloat(context.raw).toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(51, 65, 85, 0.3)' },
+                            ticks: { color: '#64748b', maxTicksLimit: 8, font: { size: 10 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(51, 65, 85, 0.3)' },
+                            ticks: { color: '#94a3b8', font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+
+            // Drawdown Chart
+            const ddGradient = ctxDD.createLinearGradient(0, 0, 0, 120);
+            ddGradient.addColorStop(0, 'rgba(244, 63, 94, 0.0)');
+            ddGradient.addColorStop(1, 'rgba(244, 63, 94, 0.3)');
+
+            drawdownChart = new Chart(ctxDD, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Drawdown Depth (%)',
+                        data: drawdowns,
+                        borderColor: '#fb7185',
+                        borderWidth: 1.5,
+                        fill: true,
+                        backgroundColor: ddGradient,
+                        tension: 0.1,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            titleColor: '#94a3b8',
+                            bodyColor: '#fb7185',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    return `Drawdown: ${parseFloat(context.raw).toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(51, 65, 85, 0.2)' },
+                            ticks: { color: '#64748b', maxTicksLimit: 8, font: { size: 9 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(51, 65, 85, 0.3)' },
+                            ticks: { color: '#fb7185', font: { size: 9 } },
+                            max: 0
+                        }
+                    }
+                }
+            });
+        }
+
+        // Run Event
+        runBtn.addEventListener('click', runSimulation);
+
+        // Initial Load Execution
+        window.onload = function() {
+            updateLabels();
+            runSimulation();
+        }
+    </script>
+</body>
+</html>
